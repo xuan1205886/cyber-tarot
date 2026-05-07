@@ -16,8 +16,8 @@
     .title{padding:14px 16px;max-width:740px}
     h1{margin:0 0 6px;font-size:clamp(24px,2.8vw,36px);line-height:1;letter-spacing:2px;color:var(--gold)}
     p{margin:0;color:var(--muted);line-height:1.55;font-size:13px}
-    .controls{padding:10px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-    button,.pill{min-height:36px;border-radius:7px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.075);color:var(--text);padding:0 12px;font:inherit;font-size:13px;transition:0.3s}
+    .controls{padding:10px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;align-items:center;}
+    button,.pill{min-height:36px;border-radius:7px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.075);color:var(--text);padding:0 15px;font:inherit;font-size:13px;transition:0.3s;display:flex;align-items:center;}
     button{cursor:pointer}button:hover,button.active{border-color:rgba(231,189,100,.72);background:rgba(231,189,100,.16);color:var(--gold)}
     
     /* 单卡解析浮窗 */
@@ -56,7 +56,7 @@
 
     #cursor{position:fixed;z-index:20;width:24px;height:24px;margin:-12px 0 0 -12px;border-radius:50%;border:2px solid rgba(255,255,255,.92);background:rgba(89,164,255,.2);box-shadow:0 0 24px rgba(89,164,255,.7);pointer-events:none;transform:translate3d(50vw,50vh,0);transition: width 0.2s, height 0.2s, border-color 0.2s;}
     #cursor.pinch{width:38px;height:38px;margin:-19px 0 0 -19px;border-color:rgba(231,189,100,.96);background:rgba(231,189,100,.22)}
-    #camera{position:fixed;right:18px;top:96px;z-index:4;width:184px;height:138px;object-fit:cover;transform:scaleX(-1);opacity:.38;border:1px solid var(--line);border-radius:8px;display:none;background:#111}
+    #camera{position:fixed;right:18px;top:96px;z-index:4;width:184px;height:138px;object-fit:cover;transform:scaleX(-1);opacity:.7;border:1px solid var(--line);border-radius:8px;background:#111;display:none;}
     .hint{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:9;color:var(--gold);font-size:14px;letter-spacing:4px;text-align:center;pointer-events:none;text-shadow: 0 0 10px #000;}
 
     @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
@@ -69,13 +69,11 @@
   <div class="hud">
     <section class="title panel">
       <h1>塔罗牌占卜</h1>
-      <p>连接宇宙星轨。集齐三张牌灵后，星门将开启深度解析。</p>
+      <p>仅限灵视交互。集齐三张牌灵后，星门将开启深度解析。</p>
     </section>
     <section class="controls panel">
-      <button id="gestureBtn">启动感知</button>
-      <button id="actionBtn" style="display:none;">释放星尘</button>
-      <button id="resetBtn">重置阵法</button>
-      <span id="deckStatus" class="pill">剩余 78 · 已抽 0/3</span>
+      <span id="deckStatus" class="pill" style="border-color:rgba(231,189,100,.8); color:var(--gold);">剩余 78 · 已抽 0/3</span>
+      <button id="resetBtn" onclick="location.reload()">重启星轨</button>
     </section>
   </div>
 
@@ -85,7 +83,7 @@
       <p id="c-desc">解析内容...</p>
   </div>
   
-  <div class="hint" id="hint-text">拖动牌阵滑动，点击卡牌翻开</div>
+  <div class="hint" id="hint-text">正在连接星轨，请允许摄像头权限...</div>
 
   <div id="result-overlay">
       <div class="result-header">
@@ -112,8 +110,6 @@
     const TARGET_DRAWS = 3, CARD_W = 1.32, CARD_H = 2.26, GAP = .38, VISIBLE = 35;
     const ui = {
         cursor: document.getElementById('cursor'), video: document.getElementById('camera'),
-        gestureBtn: document.getElementById('gestureBtn'), mouseBtn: document.getElementById('mouseBtn'),
-        actionBtn: document.getElementById('actionBtn'), resetBtn: document.getElementById('resetBtn'),
         deckStatus: document.getElementById('deckStatus'), hintText: document.getElementById('hint-text'),
         cardModal: document.getElementById('card-modal'), cName: document.getElementById('c-name'),
         cSub: document.getElementById('c-sub'), cDesc: document.getElementById('c-desc')
@@ -121,12 +117,91 @@
 
     const assets = window.CARD_ASSETS || {cards:{}, back:null}, data = window.TAROT_DATA_SOURCE || {};
     
+    // 深度文案库
     const TAROT_DB = {
-        "愚者": { element: "风", poison: "此刻你站在悬崖边缘，这不是终点，而是飞翔的起点。世界在你脚下展开，请像孩子一样拥抱未知。" },
-        "魔术师": { element: "风", poison: "你已经拥有了实现梦想所需的一切工具。现在不是等待风来，而是主动挥动魔杖。" },
-        "女祭司": { element: "水", poison: "你需要一段静默时光。答案不写在书本里，而在你心底平静的湖水中。" },
-        "女皇": { element: "土", poison: "去感受大地的脉搏。温柔对待自己，就像春天滋养万物，允许美好自然生长。" },
-        "皇帝": { element: "火", poison: "混乱需要被终结。用理性和毅力构建坚实基础，做自己生活的君主，不做情绪的奴隶。" },
+        "愚者": { element: "风", keywords: "新的开始, 纯真, 自由", poison: "此刻，你站在悬崖边缘，但这不是终点，而是飞翔的起点。世界在你脚下展开，请像孩子一样去拥抱未知。不要害怕犯错，因为最伟大的旅程往往始于看似愚蠢的一步。" },
+        "魔术师": { element: "风", keywords: "创造力, 显化, 资源", poison: "看一看你的周围，其实你已经拥有了实现梦想所需的一切工具。现在不是等待风来的时候，而是要主动挥动魔杖。专注你的意念，将无形的想法转化为有形的现实。" },
+        "女祭司": { element: "水", keywords: "直觉, 潜意识, 秘密", poison: "世界太喧嚣了，你需要一段静默的时光。答案不写在书本里，而在你心底那片平静的湖水中。信任你的直觉，那些看似没有逻辑的感觉，往往是最精准的指引。" },
+        "女皇": { element: "土", keywords: "丰盛, 关爱, 自然", poison: "去感受大地的脉搏，去创造，去爱。你的存在本身就是一种丰盛。温柔地对待自己，就像春天滋养万物一样，允许美好的事物在你的生命中自然生长。" },
+        "皇帝": { element: "火", keywords: "秩序, 权威, 稳固", poison: "混乱需要被终结。现在是时候建立秩序，规划你的版图了。用理性和毅力去构建坚实的基础，你拥有掌控局面的力量。做自己生活的君主，而不做情绪的奴隶。" },
+        "教皇": { element: "土", keywords: "传统, 指引, 信仰", poison: "也许你正在寻求某种精神上的支持。保持谦逊，向那些拥有智慧的长者或传统学习。你不必独自摸索，站在巨人的肩膀上，你会看得更远。" },
+        "恋人": { element: "风", keywords: "选择, 结合, 价值观", poison: "这不仅关于爱情，更关于忠于自我。在做选择时，请听从内心的呼唤。只有当你的头脑与心灵达成一致时，真正的和谐才会降临。爱是所有问题的答案。" },
+        "战车": { element: "水", keywords: "意志, 胜利, 进取", poison: "认准目标，握紧缰绳，勇往直前。生活会有颠簸，但你的意志力是战胜一切的武器。不要被矛盾的情绪撕扯，整合你的力量，冲向终点。" },
+        "力量": { element: "火", keywords: "勇气, 包容, 内在力量", poison: "真正的力量不是强硬的对抗，而是温柔的坚持。用爱去驯服内心的恐惧与野兽。你比你想象的更强大，这种强大来自于一颗宽容而坚韧的心。" },
+        "隐士": { element: "土", keywords: "内省, 独处, 探索", poison: "在这个喧闹的世界里，你需要提着灯笼，独自走一段路。这并不是孤独，而是为了寻找内心的光。在静默中，你会看清前方的路，找到属于你的真理。" },
+        "命运之轮": { element: "火", keywords: "转折, 机遇, 无常", poison: "生命是流动的，起起落落皆是常态。当改变来临时，不要抗拒，顺应命运的节奏。相信每一次转动，都是为了将你带向该去的地方。运气正在转向你。" },
+        "正义": { element: "风", keywords: "平衡, 因果, 真相", poison: "你所做的一切，最终都会回到你身上。保持诚实与公正，对他人，也对自己。用理性和良知去衡量每一个决定，你会得到应有的公正结果。" },
+        "倒吊人": { element: "水", keywords: "换位思考, 牺牲, 等待", poison: "如果你感到停滞不前，不妨把自己倒挂起来看世界。有时候，暂时的退让和牺牲是为了获得更高的智慧。不要挣扎，放松紧绷的神经，随遇而安。" },
+        "死神": { element: "水", keywords: "结束, 转变, 新生", poison: "不用害怕结束，正如落叶化为春泥。告别那些不再服务于你的旧模式，彻底的清理是为了迎接更美好的新生。黎明前总是最黑暗的。" },
+        "节制": { element: "火", keywords: "平衡, 疗愈, 融合", poison: "生活需要调和的艺术。不要走极端，寻找中间的平衡点。耐心一点，让事情自然发酵，身心合一的状态会带给你深层的宁静与疗愈。" },
+        "恶魔": { element: "土", keywords: "束缚, 欲望, 觉察", poison: "觉察那些让你感到沉重或不自由的关系与欲望。其实锁链并未上锁，只要你愿意正视内心的阴影，你随时可以拿回主导权。不要被表象的诱惑迷惑。" },
+        "高塔": { element: "火", keywords: "突变, 觉醒, 释放", poison: "虽然突如其来的变化让人措手不及，但这也是打破虚假幻象的契机。废墟之上，正好可以建立更真实、更坚固的自我。让不该存在的倒塌吧。" },
+        "星星": { element: "风", keywords: "希望, 灵感, 治愈", poison: "无论黑夜多么漫长，星星总在闪烁。保持信念，你是被宇宙祝福的。让灵感的泉水洗涤疲惫，未来充满了光明与希望。去做那个追星星的人。" },
+        "月亮": { element: "水", keywords: "潜意识, 梦境, 不安", poison: "面对未知感到迷茫是正常的。月光虽然朦胧，但也照亮了潜意识的路。信任你的直觉，穿越这片迷雾，不要被恐惧的阴影吓退，真相就在前方。" },
+        "太阳": { element: "火", keywords: "快乐, 成功, 活力", poison: "敞开心扉，像孩子一样去欢笑吧！阴霾已经散去，温暖的阳光正照耀着你。你的积极和热情能感染身边的每一个人。这是收获与喜悦的时刻。" },
+        "审判": { element: "火", keywords: "觉醒, 号召, 复活", poison: "这是一个重要的时刻，你听到了内心的召唤。回顾过往，原谅自己，然后轻装上阵。你已经准备好进入生命的新阶段了，去回应那个更高版本的自己。" },
+        "世界": { element: "土", keywords: "圆满, 完成, 整合", poison: "恭喜你，一段旅程即将圆满结束。你所经历的一切都成为了你的财富。享受这份成就感，世界正与你共舞，你与万物本是一体。" },
+        
+        "权杖首牌": { element: "火", poison: "一股新的能量正在苏醒。抓住那个让你心跳加速的想法，现在就是行动的最佳时机。" },
+        "权杖二": { element: "火", poison: "你已经站在了高处，世界尽收眼底。不要满足于现状，大胆地去规划未来，你的格局决定了你能走多远。" },
+        "权杖三": { element: "火", poison: "你的船只已经扬帆起航。保持耐心和信心，你付出的努力正在回流。眼光放长远，更广阔的天地在等着你。" },
+        "权杖四": { element: "火", poison: "这是一个值得庆祝的时刻。享受与亲友相聚的温暖，或者为自己取得的阶段性成果感到自豪。你很安全，也很被爱。" },
+        "权杖五": { element: "火", poison: "混乱和争执有时候是成长的催化剂。不要回避冲突，在碰撞中明确自己的立场，这会让你变得更加锐利。" },
+        "权杖六": { element: "火", poison: "你的努力被看见了。享受众人的掌声和赞赏，这是你应得的荣耀。保持这份自信，继续前行。" },
+        "权杖七": { element: "火", poison: "即使面临挑战，也要坚守你的立场。你比你想象的更有韧性。不要放弃，最后一步往往是最艰难的。" },
+        "权杖八": { element: "火", poison: "事情正在飞速发展，请保持敏捷。顺应这股快速流动的能量，不要拖延，想要的结果很快就会到来。" },
+        "权杖九": { element: "火", poison: "你可能感到疲惫，但请再坚持一下。过去的伤痛让你变得谨慎，但也让你更加坚强。守住最后一道防线。" },
+        "权杖十": { element: "火", poison: "你背负了太多不属于你的重量。试着放下一些责任，或者寻求帮助。只有轻装上阵，才能走得更远。" },
+        "权杖侍从": { element: "火", poison: "保持好奇心，像个探险家一样去尝试新鲜事物。哪怕稍微冲动一点也没关系，那是生命力的体现。" },
+        "权杖骑士": { element: "火", poison: "你的热情无人能挡，但记得看清方向再冲刺。把这股爆发力用在最关键的地方，你会势如破竹。" },
+        "权杖皇后": { element: "火", poison: "你是自信且迷人的。相信自己的魅力，用你的热情去感染他人。你可以同时拥有温柔与力量。" },
+        "权杖国王": { element: "火", poison: "发挥你的领导力，你拥有掌控大局的能力。用成熟和远见去指引方向，你是天生的领袖。" },
+
+        "圣杯首牌": { element: "水", poison: "敞开心扉，爱与情感正在涌入你的生活。允许自己去感受，去爱，去接受馈赠。" },
+        "圣杯二": { element: "水", poison: "一段美好的关系正在建立，无论是爱情还是合作。在平等的交流中，你会发现彼此的灵魂是如此契合。" },
+        "圣杯三": { element: "水", poison: "去和朋友们聚聚吧！分享快乐会让快乐加倍。在欢声笑语中，你的心灵会得到疗愈。" },
+        "圣杯四": { element: "水", poison: "如果你感到情绪低落或对现状不满，试着抬起头看看。新的机会就在眼前，只是你还没伸出手去接。" },
+        "圣杯五": { element: "水", poison: "悲伤是可以的，但不要一直盯着打翻的杯子。转身看看，还有两只杯子是满的，还有爱留在你身边。" },
+        "圣杯六": { element: "水", poison: "童年的回忆或旧友可能会带来温暖的慰藉。保持一颗单纯善良的心，简单的快乐最抚凡人心。" },
+        "圣杯七": { element: "水", poison: "眼前的选择眼花缭乱，但要分清哪些是虚幻的泡沫，哪些是真实的渴望。脚踏实地，做出最适合你的选择。" },
+        "圣杯八": { element: "水", poison: "听从内心的召唤，去寻找更深层的意义。离开舒适区需要勇气，但为了心灵的满足，这是一场值得的旅程。" },
+        "圣杯九": { element: "水", poison: "愿望即将成真，这是你应得的奖赏。好好享受当下的满足感，你已经做得足够好了。" },
+        "圣杯十": { element: "水", poison: "幸福就在身边，在家人和爱人的笑容里。珍惜这份稳稳的幸福，这是情感最圆满的状态。" },
+        "圣杯侍从": { element: "水", poison: "你的直觉非常敏锐，相信那些微小的灵感。对待他人要温柔，也允许自己展露脆弱的一面。" },
+        "圣杯骑士": { element: "水", poison: "跟随你的心去追求梦想吧。做一个浪漫的理想主义者并不可笑，世界需要你的柔情。" },
+        "圣杯皇后": { element: "水", poison: "你的温柔是最大的武器。倾听内心的声音，照顾好自己的情绪，你也能成为他人的疗愈者。" },
+        "圣杯国王": { element: "水", poison: "在风浪中保持情绪的平稳。用宽容和智慧去处理人际关系，你可以掌控自己的情感海洋。" },
+
+        "宝剑首牌": { element: "风", poison: "理性的光芒将刺破迷雾。保持头脑清晰，一个新的想法或决断将带你突破重围。" },
+        "宝剑二": { element: "风", poison: "不要因为害怕受伤而封闭内心。摘下眼罩，勇敢地做出决定，哪怕这需要打破暂时的平静。" },
+        "宝剑三": { element: "风", poison: "心痛是疗愈的开始。不要压抑眼泪，让悲伤流淌出来。风雨过后，你的心会变得更加通透。" },
+        "宝剑四": { element: "风", poison: "你太累了，大脑需要关机重启。好好睡一觉，或者去冥想。现在的停歇是为了走更长远的路。" },
+        "宝剑五": { element: "风", poison: "赢得争吵如果意味着失去人心，那并不值得。适时地放下骄傲，退一步海阔天空。" },
+        "宝剑六": { element: "风", poison: "困难时期正在离去，你正驶向平静的水域。虽然带着淡淡的哀愁，但请相信前方有光。" },
+        "宝剑七": { element: "风", poison: "有时候需要一点小聪明和策略来解决问题。但也要问问自己，是否在逃避什么必须面对的真相？" },
+        "宝剑八": { element: "风", poison: "这种无力感更多是来自你思想的牢笼。睁开眼看看，其实并没有人真正捆住你，你可以走出来的。" },
+        "宝剑九": { element: "风", poison: "不要让焦虑吞噬你的睡眠。最坏的情况往往只存在于想象中。天亮之后，一切都会好起来的。" },
+        "宝剑十": { element: "风", poison: "这是黎明前最黑暗的时刻。既然已经跌落谷底，怎么走都是向上。痛苦即将结束，太阳照常升起。" },
+        "宝剑侍从": { element: "风", poison: "保持机敏，多观察周围的信息。用理性的思维去分析问题，不要被表象迷惑。" },
+        "宝剑骑士": { element: "风", poison: "你的思维敏捷，言辞犀利。但要注意说话的方式，不要在无意中刺伤了关心你的人。" },
+        "宝剑皇后": { element: "风", poison: "保持你的独立思考能力。划清界限不是冷漠，而是为了保护自己。你知道什么是真相。" },
+        "宝剑国王": { element: "风", poison: "用逻辑和原则来做决定。现在需要的是冷静的头脑，而不是泛滥的情感。站在公正的立场上。" },
+
+        "星币首牌": { element: "土", poison: "一个实质性的机会出现了，无论是金钱还是工作。伸出手抓住它，这是一颗幸福的种子。" },
+        "星币二": { element: "土", poison: "生活就像骑自行车，保持平衡的关键在于不断移动。灵活地应对变化，你能处理好这一切。" },
+        "星币三": { element: "土", poison: "与他人合作能创造出更棒的作品。打磨你的技能，你的专业能力会得到认可。" },
+        "星币四": { element: "土", poison: "储蓄是好事，但不要为了安全感而变得吝啬。金钱和能量一样，需要流动起来才有价值。" },
+        "星币五": { element: "土", poison: "现在的困难只是暂时的。不要因为自尊而拒绝帮助，温暖的窗户就在不远处，敲敲门吧。" },
+        "星币六": { element: "土", poison: "在给予和接受之间寻找平衡。慷慨地分享你的好运，当你需要时，世界也会回馈你。" },
+        "星币七": { element: "土", poison: "看着种子发芽需要耐心。停下来评估一下目前的进度，欲速则不达，时间会给你最好的答案。" },
+        "星币八": { element: "土", poison: "专注地做好手头的小事。日复一日的坚持和打磨，最终会汇聚成卓越的成就。" },
+        "星币九": { element: "土", poison: "享受你辛苦得来的成果吧。你值得拥有这优渥的生活和独立的人格。你是自己花园的主人。" },
+        "星币十": { element: "土", poison: "这是物质和精神的双重富足。珍惜与家人共享的时光，这份稳定和安全感是最宝贵的财富。" },
+        "星币侍从": { element: "土", poison: "脚踏实地地开始一个新计划。保持谦虚好学的态度，每一步都算数。" },
+        "星币骑士": { element: "土", poison: "做一个值得信赖的人。虽然步子不快，但只要一步一个脚印，你一定能抵达终点。" },
+        "星币皇后": { element: "土", poison: "照顾好自己的身体和生活环境。在平凡的日常中寻找美，你拥有把生活过成诗的能力。" },
+        "星币国王": { element: "土", poison: "你已经具备了构建繁荣的能力。用务实和稳健的态度去管理资源，你是值得依靠的磐石。" },
+
         "DEFAULT": { element: "风", poison: "跟随直觉，答案就在风中。命运的齿轮已开始转动。" }
     };
 
@@ -143,15 +218,12 @@
     }
     const deck = buildDeck();
 
-    // 核心重构：严格锁定的状态机
     const state = {
-        mode: 'mouse', 
         appState: 'IDLE', // IDLE, GRABBING, REVEALED, DISSOLVING, FINISHED
         pointer: new THREE.Vector2(0,0), pointerPx: {x:innerWidth/2, y:innerHeight/2},
         hovered: null, grabbed: null, selected: null, remaining: deck.map((_,i)=>i), spread: [],
-        scroll: 0, velocity: 2.2, drag: {active:false, x:0},
-        handXs: [], 
-        pinchStartSize: 0, pullThreshold: 0.08, particles: [], dissolves: [] // 恢复 dissolves 数组用于标记状态
+        scroll: 0, velocity: 2.2, handXs: [], 
+        pinchStartSize: 0, pullThreshold: 0.08, particles: [], dissolves: [] 
     };
 
     const renderer = new THREE.WebGLRenderer({canvas: document.getElementById('scene'), antialias: true, alpha: true});
@@ -173,17 +245,10 @@
     items.forEach(i => cardGroup.add(i.group));
     const raycaster = new THREE.Raycaster(), clock = new THREE.Clock();
 
-    ui.gestureBtn.onclick = () => setMode('gesture');
-    ui.mouseBtn.onclick = () => setMode('mouse');
-    ui.actionBtn.onclick = handleMouseAction;
-    ui.resetBtn.onclick = () => location.reload();
-
-    addEventListener('pointermove', onMove); addEventListener('pointerdown', onDown); addEventListener('pointerup', onUp);
     addEventListener('resize', () => { camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 
     updateDeck(); animate();
 
-    // 辅助函数：绘制圆形渐变材质，恢复原汁原味的柔和星尘！
     function createCircleTexture() {
         const canvas = document.createElement('canvas');
         canvas.width = 32; canvas.height = 32;
@@ -197,8 +262,11 @@
     }
     const circleTex = createCircleTexture();
 
+    // 自动启动摄像头并开启灵视
+    initHands();
+
     // ============================================
-    // 核心 1: 无限流滑动引擎 (无破坏替补)
+    // 核心 1: 无限流滑动引擎 
     // ============================================
     function layout(dt) {
         const spacing = CARD_W + GAP;
@@ -210,7 +278,7 @@
         }
         
         items.forEach((it, slot) => {
-            // 如果卡牌被抓取，或者正在消散等待替补，就不参与牌阵跟随，从而自然留下“空洞”！
+            // 被抓取的牌、或正在等待替补的空洞，不参与滑动
             if(it === state.grabbed || state.dissolves.some(d => d.item === it)) return;
             
             let x = (slot - Math.floor(VISIBLE/2)) * spacing + state.scroll;
@@ -243,18 +311,17 @@
     // ============================================
     // 核心 2: 状态机与物理动画
     // ============================================
-    
     function startGrab() {
         if(!state.hovered || !state.remaining.length) return;
         state.appState = 'GRABBING';
-        state.grabbed = state.hovered; // layout() 会自动忽略它，原位直接出现完美的空洞！
-        state.velocity *= 0.1;
+        state.grabbed = state.hovered; 
+        
+        // 瞬间降速，保持牌阵惯性但停止飞速滑动
+        state.velocity *= 0.1; 
         ui.cursor.classList.add('pinch');
     }
 
     function cancelGrab() {
-        // 放手取消抓取：由于没有创建新的垃圾替补对象，直接切回 IDLE，
-        // layout() 会自然将悬在半空的卡牌 lerp 吸回刚才的空洞里！绝不卡死。
         state.appState = 'IDLE'; 
         state.grabbed = null; 
         ui.cursor.classList.remove('pinch');
@@ -275,24 +342,21 @@
         ui.cDesc.innerText = orientation === 'reversed' ? cardData.reversed : cardData.upright;
         ui.cardModal.classList.add('active');
         
-        if(state.mode === 'mouse') { ui.actionBtn.style.display = 'inline-block'; }
-        else ui.hintText.innerText = "张开手掌 (RELEASE) 释放星尘";
+        ui.hintText.innerText = "张开手掌 (RELEASE) 释放星尘";
     }
 
     function dissolveCard() {
         if(state.appState !== 'REVEALED') return;
-        
-        state.appState = 'DISSOLVING'; // 严格锁死状态机，防止多次触发！
+        state.appState = 'DISSOLVING'; 
         
         ui.cardModal.classList.remove('active');
-        if(state.mode === 'mouse') ui.actionBtn.style.display = 'none';
 
         const it = state.grabbed;
         state.remaining.splice(state.selected.pendingIndex, 1);
         state.spread.push(state.selected);
         updateDeck();
 
-        it.group.visible = false; // 图片瞬间消失
+        it.group.visible = false; 
 
         // 柔和圆形的细腻星尘
         const count = 4000, pos = new Float32Array(count*3), vel = new Float32Array(count*3);
@@ -312,21 +376,17 @@
             transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false 
         });
         const points = new THREE.Points(geo, mat); scene.add(points);
-        state.particles.push({points, geo, mat, age: 0, duration: 1.8});
-
-        // 记录正在消散的卡，保持空洞状态
-        state.dissolves.push({item: it, age: 0, duration: 1.8});
         
-        state.grabbed = null; 
-        state.selected = null; 
-        ui.cursor.classList.remove('pinch');
-        state.handXs = []; 
+        // 【加速替补】控制粒子存活1.8秒，但仅隔离 0.8 秒后就让新卡浮现
+        state.particles.push({points, geo, mat, age: 0, duration: 1.8});
+        state.dissolves.push({item: it, age: 0, duration: 0.8});
 
-        // 星尘消散完毕后，原地生成替补新牌！
+        state.grabbed = null; state.selected = null; ui.cursor.classList.remove('pinch'); state.handXs = []; 
+
         setTimeout(() => {
-            state.dissolves = state.dissolves.filter(d => d.item !== it); // 从隔离区移除
+            state.dissolves = state.dissolves.filter(d => d.item !== it); 
             
-            // 重置这张牌作为替补，并从 0 开始缩放出现
+            // 替补牌从 0 缩放慢慢浮现
             it.group.visible = true;
             it.group.scale.setScalar(0);
             it.mat.map = backTexture;
@@ -336,10 +396,10 @@
             if(state.spread.length >= TARGET_DRAWS) {
                 showFinalOverlay();
             } else {
-                state.appState = 'IDLE'; // 解锁状态机
-                ui.hintText.innerText = state.mode==='gesture' ? "手势左右挥动可滑动卡牌，PINCH向后拉动翻开" : "拖动滑动牌阵，点击卡牌翻开";
+                state.appState = 'IDLE'; 
+                ui.hintText.innerText = "左右挥动可滑动卡牌，PINCH(捏合)向后拉动翻开";
             }
-        }, 1800);
+        }, 800);
     }
 
     function updateGrabbed() {
@@ -350,6 +410,8 @@
             it.group.position.y = lerp(it.group.position.y, -state.pointer.y * 1.5 + 0.5, 0.18);
             it.group.position.z = lerp(it.group.position.z, 2.0, 0.18);
             it.group.scale.setScalar(lerp(it.group.scale.x, 1.2, 0.18));
+            it.group.rotation.x = lerp(it.group.rotation.x, 0, 0.18);
+            it.group.rotation.y = lerp(it.group.rotation.y, 0, 0.18);
         } else if (state.appState === 'REVEALED') {
             it.group.position.lerp(new THREE.Vector3(0, 0.5, 5.0), 0.1);
             it.group.rotation.x = lerp(it.group.rotation.x, 0, 0.1);
@@ -410,58 +472,27 @@
         state.pointer.x = state.pointerPx.x / innerWidth * 2 - 1; state.pointer.y = -(state.pointerPx.y / innerHeight) * 2 + 1;
         ui.cursor.style.transform = `translate3d(${state.pointerPx.x}px,${state.pointerPx.y}px,0)`;
     }
-    
-    function onMove(e){ 
-        if(state.mode==='mouse'){ 
-            setPointer(e.clientX, e.clientY); 
-            if(state.drag.active && state.appState === 'IDLE') {
-                const dx = e.clientX - state.drag.x;
-                state.velocity = clamp(state.velocity + dx * 0.18, -42, 42); 
-                state.drag.x = e.clientX; 
-            } 
-        } 
-    }
-    function onDown(e){ if(state.mode==='mouse'){ state.drag = {active:true, x:e.clientX}; setPointer(e.clientX, e.clientY); } }
-    function onUp(){ 
-        if(state.mode==='mouse'){ 
-            state.drag.active = false; 
-            if(state.appState === 'IDLE' && state.hovered && Math.abs(state.velocity) < 5) {
-                startGrab();
-                setTimeout(revealCard, 150); 
-            } else if (state.appState === 'GRABBING') {
-                cancelGrab(); // 鼠标防卡死
-            }
-        } 
-    }
-    function handleMouseAction() {
-        if(state.appState === 'REVEALED') dissolveCard();
-    }
 
     let hands = null;
-    async function setMode(mode){
-        state.mode = mode;
-        if(mode === 'gesture'){
-            ui.video.style.display = 'block'; ui.actionBtn.style.display = 'none';
-            ui.hintText.innerText = "左右挥动可滑动卡牌，PINCH向后拉动翻开，张手化为星尘";
-            if(!hands) {
-                const stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'user'}});
-                ui.video.srcObject = stream; await ui.video.play();
-                hands = new window.Hands({locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
-                hands.setOptions({maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6});
-                hands.onResults(onHands);
-                const loop = async () => { if(ui.video.readyState >= 2) await hands.send({image: ui.video}); requestAnimationFrame(loop); };
-                loop();
-            }
-        } else {
-            ui.video.style.display = 'none';
-            ui.hintText.innerText = "拖动牌阵滑动，点击卡牌翻开";
-            if(state.appState === 'REVEALED') ui.actionBtn.style.display = 'inline-block';
+    async function initHands(){
+        ui.video.style.display = 'block'; 
+        ui.hintText.innerText = "正在开启灵视，请允许使用摄像头...";
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'user'}});
+            ui.video.srcObject = stream; await ui.video.play();
+            hands = new window.Hands({locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+            hands.setOptions({maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6});
+            hands.onResults(onHands);
+            const loop = async () => { if(ui.video.readyState >= 2) await hands.send({image: ui.video}); requestAnimationFrame(loop); };
+            loop();
+            ui.hintText.innerText = "左右挥动可滑动卡牌，PINCH(捏合)向后拉动翻开";
+        } catch(e) {
+            ui.hintText.innerText = "摄像头权限获取失败，请刷新网页并允许权限。";
         }
-        ui.gestureBtn.classList.toggle('active', mode==='gesture'); ui.mouseBtn.classList.toggle('active', mode==='mouse');
     }
 
     function onHands(res){
-        if(state.mode !== 'gesture' || state.appState === 'FINISHED') return;
+        if(state.appState === 'FINISHED') return;
         const lm = res.multiHandLandmarks && res.multiHandLandmarks[0];
         if(!lm){ ui.cursor.classList.remove('pinch'); return; }
         
@@ -490,7 +521,7 @@
             if (state.pinchStartSize - currentSize > state.pullThreshold) {
                 revealCard(); 
             } else if (!isPinching) {
-                cancelGrab(); // 半路放手，牌飞回去
+                cancelGrab(); 
             }
         } else if (state.appState === 'REVEALED') {
             if (isOpen) dissolveCard(); 
@@ -503,7 +534,6 @@
         const dt = Math.min(clock.getDelta(), 0.033);
         layout(dt); raycast(); updateGrabbed();
         
-        // 更新粒子
         for(let i = state.particles.length-1; i>=0; i--){
             const p = state.particles[i]; 
             const positions = p.geo.attributes.position.array;
